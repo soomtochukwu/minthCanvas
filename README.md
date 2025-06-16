@@ -15,7 +15,7 @@ A reusable React component for creating interactive canvas-based drawings, desig
 ## Installation
 
 ```bash
-npm install @maziofweb3/minth-canvas
+npm install @maziofweb3/minth-canvas --legacy-peer-deps
 ```
 
 ## Prerequisites
