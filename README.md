@@ -213,3 +213,9 @@ For issues, feature requests, or questions, open an issue on [GitHub](https://gi
 - Minth
 - Lisk
 - Celo
+
+<!--
+npm version patch  # For bug fixes (1.0.1)
+npm version minor  # For new features (1.1.0)
+npm version major  # For breaking changes (2.0.0)
+ -->
