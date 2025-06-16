@@ -124,7 +124,7 @@ export default function CanvasDrawing({
       startY: 0,
       endX: 0,
       endY: 0,
-      isSelecting: true,
+      isSelecting: false,
       selectedImageData: null,
       isDragging: false,
       dragStartX: 0,
@@ -136,129 +136,23 @@ export default function CanvasDrawing({
   const [fontSize, setFontSize] = useState<number>(20);
   const [fontFamily, setFontFamily] = useState<string>("Arial");
 
-  // Initialize main canvas and temp canvas
-  useEffect(() => {
+  // Save canvas state for undo/redo
+  const saveCanvasState = useCallback(() => {
+    if (!canvasRef.current) return;
+
     const canvas = canvasRef.current;
-    const tempCanvas = tempCanvasRef.current;
+    const imageData = canvas.toDataURL("image/png");
 
-    if (!canvas || !tempCanvas) return;
-
-    // Set canvas size based on container
-    const container = canvas.parentElement;
-    if (container) {
-      const { width, height } = container.getBoundingClientRect();
-      const dpr = window.devicePixelRatio || 1;
-      const newWidth = Math.min(width - 20, 1400) * dpr;
-      const newHeight = Math.min(height - 80, 900) * dpr;
-
-      setCanvasSize({
-        width: newWidth / dpr,
-        height: newHeight / dpr,
-      });
-
-      canvas.width = newWidth;
-      canvas.height = newHeight;
-      tempCanvas.width = newWidth;
-      tempCanvas.height = newHeight;
-
-      // Set CSS size to match logical pixels
-      canvas.style.width = `${newWidth / dpr}px`;
-      canvas.style.height = `${newHeight / dpr}px`;
-      tempCanvas.style.width = `${newWidth / dpr}px`;
-      tempCanvas.style.height = `${newHeight / dpr}px`;
-
-      const context = canvas.getContext("2d", { willReadFrequently: true });
-      const tempContext = tempCanvas.getContext("2d", {
-        willReadFrequently: true,
-      });
-
-      if (context && tempContext) {
-        context.lineCap = "round";
-        context.lineJoin = "round";
-        context.strokeStyle = currentColor;
-        context.fillStyle = currentColor;
-        context.lineWidth = brushSize;
-
-        tempContext.lineCap = "round";
-        tempContext.lineJoin = "round";
-        tempContext.strokeStyle = currentColor;
-        tempContext.fillStyle = currentColor;
-        tempContext.lineWidth = brushSize;
-
-        setCtx(context);
-        setTempCtx(tempContext);
-
-        // Save initial canvas state
-        const initialState = canvas.toDataURL("image/png");
-        setHistory([{ imageData: initialState }]);
+    setHistory((prev) => {
+      const newHistory = [...prev, { imageData }];
+      if (newHistory.length > 20) {
+        return newHistory.slice(newHistory.length - 20);
       }
-    }
+      return newHistory;
+    });
+
+    setRedoStack([]);
   }, []);
-
-  // Update canvas size on window resize
-  useEffect(() => {
-    const handleResize = () => {
-      const canvas = canvasRef.current;
-      const tempCanvas = tempCanvasRef.current;
-
-      if (!canvas || !tempCanvas || !ctx) return;
-
-      const container = canvas.parentElement;
-      if (container) {
-        const dpr = window.devicePixelRatio || 1;
-        const { width, height } = container.getBoundingClientRect();
-        const newWidth = Math.min(width - 20, 1400) * dpr;
-        const newHeight = Math.min(height - 80, 900) * dpr;
-
-        setCanvasSize({
-          width: newWidth / dpr,
-          height: newHeight / dpr,
-        });
-
-        // Preserve current drawing
-        const currentDrawing = canvas.toDataURL();
-
-        canvas.width = newWidth;
-        canvas.height = newHeight;
-        tempCanvas.width = newWidth;
-        tempCanvas.height = newHeight;
-
-        canvas.style.width = `${newWidth / dpr}px`;
-        canvas.style.height = `${newHeight / dpr}px`;
-        tempCanvas.style.width = `${newWidth / dpr}px`;
-        tempCanvas.style.height = `${newHeight / dpr}px`;
-
-        // Restore drawing
-        const img = new Image();
-        img.crossOrigin = "anonymous";
-        img.src = currentDrawing;
-        img.onload = () => {
-          ctx.drawImage(img, 0, 0, newWidth / dpr, newHeight / dpr);
-        };
-      }
-    };
-
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, [ctx, tempCtx]);
-
-  // Update context when tool, color, or size changes
-  useEffect(() => {
-    if (!ctx || !tempCtx) return;
-
-    // Validate color to ensure it's a valid hex code
-    const validColor = /^#[0-9A-Fa-f]{6}$/.test(currentColor)
-      ? currentColor
-      : "#00f5ff";
-
-    ctx.strokeStyle = validColor;
-    ctx.fillStyle = validColor;
-    ctx.lineWidth = brushSize;
-
-    tempCtx.strokeStyle = validColor;
-    tempCtx.fillStyle = validColor;
-    tempCtx.lineWidth = brushSize;
-  }, [ctx, tempCtx, currentColor, brushSize]);
 
   // Handle undo
   const handleUndo = useCallback(() => {
@@ -319,6 +213,147 @@ export default function CanvasDrawing({
     };
   }, [ctx, redoStack]);
 
+  // Handle clear canvas
+  const handleClear = useCallback(() => {
+    if (!ctx || !canvasRef.current) return;
+
+    setShowConfirmClear(true);
+  }, [ctx]);
+
+  // Confirm clear canvas
+  const confirmClear = useCallback(() => {
+    if (!ctx || !canvasRef.current) return;
+
+    ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+    saveCanvasState();
+    setShowConfirmClear(false);
+  }, [ctx, saveCanvasState]);
+
+  // Handle save
+  const handleSave = useCallback(() => {
+    if (!canvasRef.current) return;
+
+    canvasRef.current.toBlob((blob) => {
+      if (blob) {
+        const file = new File([blob], "canvas_drawing.png", {
+          type: "image/png",
+        });
+        const url = URL.createObjectURL(blob);
+        onImageGenerated(file, url);
+      }
+    }, "image/png");
+  }, [onImageGenerated]);
+
+  // Handle background change
+  const handleBackgroundChange = useCallback(
+    (background: string) => {
+      setCurrentBackground(background);
+
+      if (!ctx || !canvasRef.current) return;
+
+      // Preserve current drawing
+      const currentDrawing = canvasRef.current.toDataURL();
+
+      // Apply new background
+      const canvas = canvasRef.current;
+      canvas.style.background = getBackgroundStyle(background);
+
+      // Restore drawing
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.src = currentDrawing;
+      img.onload = () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      };
+
+      saveCanvasState();
+    },
+    [ctx, saveCanvasState]
+  );
+
+  // Initialize main canvas and temp canvas
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const tempCanvas = tempCanvasRef.current;
+
+    if (!canvas || !tempCanvas) return;
+
+    // Set canvas size based on container
+    const container = canvas.parentElement;
+    if (container) {
+      const { width, height } = container.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      const newWidth = Math.min(width - 20, 1400) * dpr;
+      const newHeight = Math.min(height - 80, 900) * dpr;
+
+      setCanvasSize({
+        width: newWidth / dpr,
+        height: newHeight / dpr,
+      });
+
+      canvas.width = newWidth;
+      canvas.height = newHeight;
+      tempCanvas.width = newWidth;
+      tempCanvas.height = newHeight;
+
+      // Set CSS size to match logical pixels
+      canvas.style.width = `${newWidth / dpr}px`;
+      canvas.style.height = `${newHeight / dpr}px`;
+      tempCanvas.style.width = `${newWidth / dpr}px`;
+      tempCanvas.style.height = `${newHeight / dpr}px`;
+
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      const tempContext = tempCanvas.getContext("2d", {
+        willReadFrequently: true,
+      });
+
+      if (context && tempContext) {
+        context.lineCap = "round";
+        context.lineJoin = "round";
+        context.strokeStyle = currentColor;
+        context.fillStyle = currentColor;
+        context.lineWidth = brushSize;
+
+        tempContext.lineCap = "round";
+        tempContext.lineJoin = "round";
+        tempContext.strokeStyle = currentColor;
+        tempContext.fillStyle = currentColor;
+        tempContext.lineWidth = brushSize;
+
+        setCtx(context);
+        setTempCtx(tempContext);
+
+        // Save initial canvas state
+        const initialState = canvas.toDataURL("image/png");
+        setHistory([{ imageData: initialState }]);
+      }
+    }
+  }, [currentColor, brushSize]);
+
+  // Update context when tool, color, or size changes
+  useEffect(() => {
+    if (!ctx || !tempCtx) return;
+
+    // Validate color to ensure it's a valid hex code
+    const validColor = /^#(?:[0-9a-fA-F]{3}){1,2}$/.test(currentColor)
+      ? currentColor
+      : "#00f5ff";
+
+    // Ensure context properties are updated
+    ctx.strokeStyle = validColor;
+    ctx.fillStyle = validColor;
+    ctx.lineWidth = brushSize;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    tempCtx.strokeStyle = validColor;
+    tempCtx.fillStyle = validColor;
+    tempCtx.lineWidth = brushSize;
+    tempCtx.lineCap = "round";
+    tempCtx.lineJoin = "round";
+  }, [ctx, tempCtx, currentColor, brushSize]);
+
   // Keyboard shortcuts
   useHotkeys("ctrl+z", handleUndo, { enableOnFormTags: true });
   useHotkeys("ctrl+y", handleRedo, { enableOnFormTags: true });
@@ -347,24 +382,6 @@ export default function CanvasDrawing({
   useHotkeys("s", () => setCurrentTool("selection"), {
     enableOnFormTags: false,
   });
-
-  // Save canvas state for undo/redo
-  const saveCanvasState = useCallback(() => {
-    if (!canvasRef.current) return;
-
-    const canvas = canvasRef.current;
-    const imageData = canvas.toDataURL("image/png");
-
-    setHistory((prev) => {
-      const newHistory = [...prev, { imageData }];
-      if (newHistory.length > 20) {
-        return newHistory.slice(newHistory.length - 20);
-      }
-      return newHistory;
-    });
-
-    setRedoStack([]);
-  }, []);
 
   // Get pointer position relative to canvas
   const getPointerPosition = useCallback(
@@ -1192,70 +1209,11 @@ export default function CanvasDrawing({
     saveCanvasState();
   }, [ctx, textToolState, textInput, currentColor, saveCanvasState]);
 
-  // Handle clear canvas
-  const handleClear = useCallback(() => {
-    if (!ctx || !canvasRef.current) return;
-
-    setShowConfirmClear(true);
-  }, [ctx]);
-
-  // Confirm clear canvas
-  const confirmClear = useCallback(() => {
-    if (!ctx || !canvasRef.current) return;
-
-    ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-    saveCanvasState();
-    setShowConfirmClear(false);
-  }, [ctx, saveCanvasState]);
-
-  // Handle save
-  const handleSave = useCallback(() => {
-    if (!canvasRef.current) return;
-
-    canvasRef.current.toBlob((blob) => {
-      if (blob) {
-        const file = new File([blob], "canvas_drawing.png", {
-          type: "image/png",
-        });
-        const url = URL.createObjectURL(blob);
-        onImageGenerated(file, url);
-      }
-    }, "image/png");
-  }, [onImageGenerated]);
-
-  // Handle background change
-  const handleBackgroundChange = useCallback(
-    (background: string) => {
-      setCurrentBackground(background);
-
-      if (!ctx || !canvasRef.current) return;
-
-      // Preserve current drawing
-      const currentDrawing = canvasRef.current.toDataURL();
-
-      // Apply new background
-      const canvas = canvasRef.current;
-      canvas.style.background = getBackgroundStyle(background);
-
-      // Restore drawing
-      const img = new Image();
-      img.crossOrigin = "anonymous";
-      img.src = currentDrawing;
-      img.onload = () => {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      };
-
-      saveCanvasState();
-    },
-    [ctx, saveCanvasState]
-  );
-
   // Get background style
   const getBackgroundStyle = (background: string): string => {
     switch (background) {
       case "transparent":
-        return "url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgdmlld0JveD0iMCAwIDIwIDIwIj48cmVjdCB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIGZpbGw9IiNmMWYxZjEiLz48cmVjdCB4PSIxMCIgeT0iMTAiIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCIgZmlsbD0iI2YxZjFmMSIvPjwvc3ZnPg==')";
+        return "url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMCIgaGVpZ2h0PSI2MCIgdmlld0JveD0iMCAwIDIwIDIwIj48cmVjdCB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIGZpbGw9IiNmMWYxZjEiLz48cmVjdCB4PSIxMCIgeT0iMTAiIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCIgZmlsbD0iI2YxZjFmMSIvPjwvc3ZnPg==')";
       case "white":
         return "#ffffff";
       case "black":
@@ -1275,7 +1233,7 @@ export default function CanvasDrawing({
       case "digital-noise":
         return "#111 url('/digital-noise.png')";
       case "neon-gradient":
-        return "linear-gradient(135deg, #00f5ff, #9d00ff)";
+        return "linear-gradient(135deg, #00f5ff, #ff4500)";
       case "cyber-gradient":
         return "linear-gradient(135deg, #ff00ff, #00f5ff)";
       case "green-gradient":
@@ -1285,8 +1243,8 @@ export default function CanvasDrawing({
       case "sketch":
         return "#ffffff url('/sketch-paper.png')";
       case "holographic":
-        return "linear-gradient(135deg, #ff00ff, #00f5ff, #39ff14)";
-      case "matrix":
+        return "linear-gradient(135deg, #ff4500, #00f5ff, #39ff14)";
+      case "rgb":
         return "#000 url('/matrix-pattern.png')";
       case "geometric":
         return "#0a0a0a url('/geometric-mesh.png')";
@@ -1340,7 +1298,7 @@ export default function CanvasDrawing({
             type="text"
             value={textInput}
             onChange={(e) => setTextInput(e.target.value)}
-            className="bg-gray-800 text-white p-2 rounded"
+            className="bg-gray-800 text-white-2 p rounded"
             placeholder="Enter text"
             autoFocus
           />
