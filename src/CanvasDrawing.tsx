@@ -1625,12 +1625,10 @@ export default function CanvasDrawing({
   }, [currentTool]);
 
   return (
-    <div className="flex text-inherit *:text-inherit flex-col h-full">
+    <div className="flex flex-col h-full">
       <div className="p-4 flex-grow flex flex-col">
         <div className="mb-4 flex justify-between items-center">
-          <h2 className="text-xl font-bold bg-gradient-to-r from-cyan-400 to-purple-600 text-transparent bg-clip-text">
-            Create Your NFT Artwork
-          </h2>
+          <h2 className="text-xl font-bold ">Create Your NFT Artwork</h2>
           <div className="flex items-center gap-2">
             <button
               onClick={handleFillModeToggle}
