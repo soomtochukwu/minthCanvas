@@ -1,7 +1,6 @@
 "use client";
 
 import type React from "react";
-
 import { useState, useCallback } from "react";
 import type { CanvasTool } from "./types/canvas";
 import {
@@ -75,15 +74,9 @@ export default function CanvasToolbar({
 
   const handleColorChange = useCallback(
     (color: string) => {
-      setCurrentColor(color);
-      setShowColorPicker(false);
-    },
-    [setCurrentColor]
-  );
-
-  const handleColorInputChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      setCurrentColor(e.target.value);
+      // Validate hex color (e.g., #RRGGBB)
+      const hexColor = color.match(/^#[0-9A-Fa-f]{6}$/) ? color : "#00f5ff";
+      setCurrentColor(hexColor);
     },
     [setCurrentColor]
   );
@@ -893,11 +886,10 @@ export default function CanvasToolbar({
           <span className="text-sm text-gray-400">Color:</span>
           <Popover open={showColorPicker} onOpenChange={setShowColorPicker}>
             <PopoverTrigger asChild>
-              <input
-                type="color"
-                value={currentColor}
-                onChange={(e) => handleColorChange(e.target.value)}
+              <div
                 className="w-8 h-8 rounded-full border-2 border-white/20 shadow-md hover:scale-110 transition-transform cursor-pointer"
+                style={{ backgroundColor: currentColor }}
+                onClick={() => setShowColorPicker(true)}
                 aria-label="Select color"
               />
             </PopoverTrigger>
@@ -912,7 +904,10 @@ export default function CanvasToolbar({
                         : ""
                     }`}
                     style={{ backgroundColor: color }}
-                    onClick={() => handleColorChange(color)}
+                    onClick={() => {
+                      handleColorChange(color);
+                      setShowColorPicker(false);
+                    }}
                   />
                 ))}
               </div>
@@ -921,7 +916,7 @@ export default function CanvasToolbar({
                 <input
                   type="color"
                   value={currentColor}
-                  onChange={handleColorInputChange}
+                  onChange={(e) => handleColorChange(e.target.value)}
                   className="w-full h-10 rounded cursor-pointer"
                 />
               </div>
