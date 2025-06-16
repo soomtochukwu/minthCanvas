@@ -1,5 +1,5 @@
 {
-  "name": "@maziofweb3/minth-Canvas",
+  "name": "@maziofweb3/minth-canvas",
   "version": "1.0.0",
   "description": "A reusable React canvas drawing component",
   "main": "dist/cjs/index.js",
@@ -49,7 +49,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/xai/canvas-drawing.git"
+    "url": "https://github.com/soomtochukwu/minthCanvas.git"
   },
   "publishConfig": {
     "access": "public"
