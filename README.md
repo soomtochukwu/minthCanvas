@@ -1,6 +1,6 @@
 # @maziofweb3/minth-canvas
 
-A reusable React component for creating interactive canvas-based drawings, designed for web3 applications like NFT creation on platforms such as Lisk and Celo. Built with HTML5 Canvas and React hooks, it features a dual-canvas approach for optimized performance, supporting tools like brush, eraser, shapes, text, and more, with undo/redo and image export capabilities.
+A reusable React component for creating interactive canvas-based drawings, designed for web3 applications like NFT creation on platforms such as Lisk and Celo. Built with HTML5 Canvas and React hooks, it features a dual-canvas approach for optimized performance, supporting tools like brush, eraser, shapes, text, and more, with undo/redo and image export capabilities. Optimized for use in Next.js applications with the App Router.
 
 ## Features
 
@@ -28,23 +28,29 @@ npm install @maziofweb3/minth-canvas --legacy-peer-deps
   ```bash
   npm install react react-dom react-hotkeys-hook clsx tailwind-merge
   ```
-- **Tailwind CSS**: Configure Tailwind CSS in your project for styling. See [Tailwind CSS Setup](#tailwind-css-setup).
+- **Next.js**: Requires Next.js 13 or later with the App Router. Components using `@maziofweb3/minth-canvas` must include the `"use client"` directive for React Server Components.
+- **Tailwind CSS**: Configure Tailwind CSS in your Next.js project for styling. See [Tailwind CSS Setup](#tailwind-css-setup).
 - **Background Images**: Place images like `canvas-texture.png`, `circuit-pattern.png`, or `hex-grid.png` in your `public` directory or serve via a CDN. See [Background Customization](#background-customization).
-- **Next.js (Optional)**: If using Next.js App Router, mark components importing `@maziofweb3/minth-canvas` with `"use client"` for React Server Components.
 
 ## Usage
 
-Import and use the `CanvasDrawing` component in your React application:
+The `CanvasDrawing` component is designed for client-side rendering in Next.js App Router applications. Since it includes interactive features and uses client-side hooks, you must mark the component or page with `"use client"`.
 
-```jsx
+### Example: Using in a Next.js Page
+
+Create a client component (e.g., `app/canvas/page.tsx`) in your Next.js App Router project:
+
+```tsx
+"use client";
+
 import { CanvasDrawing } from "@maziofweb3/minth-canvas";
 import "tailwindcss/tailwind.css";
 
-function App() {
-  const handleImageGenerated = (file, url) => {
+export default function CanvasPage() {
+  const handleImageGenerated = (file: File, url: string) => {
     console.log("Image generated:", file, url);
-    // Example: Display or save the image
-    const img = document.createElement("img");
+    // Example: Display the image
+    const img = new Image();
     img.src = url;
     document.body.appendChild(img);
   };
@@ -63,9 +69,60 @@ function App() {
     </div>
   );
 }
-
-export default App;
 ```
+
+### Example: Using in a Client Component
+
+If you want to use `CanvasDrawing` within a server component, wrap it in a client component. Create a client component (e.g., `components/CanvasWrapper.tsx`):
+
+```tsx
+"use client";
+
+import { CanvasDrawing } from "@maziofweb3/minth-canvas";
+
+interface CanvasWrapperProps {
+  onImageGenerated: (file: File, url: string) => void;
+}
+
+export default function CanvasWrapper({
+  onImageGenerated,
+}: CanvasWrapperProps) {
+  return (
+    <div className="h-screen">
+      <CanvasDrawing
+        onImageGenerated={onImageGenerated}
+        initialWidth={800}
+        initialHeight={600}
+        initialBackground="white"
+        initialTool="brush"
+        initialColor="#00f5ff"
+        initialBrushSize={10}
+      />
+    </div>
+  );
+}
+```
+
+Then, import it into a server component or page (e.g., `app/nft/page.tsx`):
+
+```tsx
+import CanvasWrapper from "@/components/CanvasWrapper";
+
+export default function NFTPage() {
+  const handleImageGenerated = (file: File, url: string) => {
+    console.log("Image generated:", file, url);
+  };
+
+  return (
+    <main>
+      <h1>Create NFT Artwork</h1>
+      <CanvasWrapper onImageGenerated={handleImageGenerated} />
+    </main>
+  );
+}
+```
+
+**Note**: Ensure your Next.js project includes Tailwind CSS styles by importing `tailwindcss/tailwind.css` in a global CSS file or a layout component.
 
 ## API
 
@@ -118,7 +175,7 @@ Powered by `react-hotkeys-hook`:
 
 ## Tailwind CSS Setup
 
-Configure Tailwind CSS in your project:
+Configure Tailwind CSS in your Next.js project:
 
 1. Install Tailwind CSS:
 
@@ -133,7 +190,9 @@ Configure Tailwind CSS in your project:
    /** @type {import('tailwindcss').Config} */
    module.exports = {
      content: [
-       "./src/**/*.{js,jsx,ts,tsx}",
+       "./app/**/*.{js,ts,jsx,tsx,mdx}",
+       "./pages/**/*.{js,ts,jsx,tsx,mdx}",
+       "./components/**/*.{js,ts,jsx,tsx,mdx}",
        "./node_modules/@maziofweb3/minth-canvas/dist/**/*.{js,jsx,ts,tsx}",
      ],
      theme: {
@@ -143,11 +202,26 @@ Configure Tailwind CSS in your project:
    };
    ```
 
-3. Add Tailwind directives to your CSS (e.g., `src/index.css`):
+3. Create or update `app/globals.css`:
+
    ```css
    @tailwind base;
    @tailwind components;
    @tailwind utilities;
+   ```
+
+4. Ensure `globals.css` is imported in your root layout (`app/layout.tsx`):
+
+   ```tsx
+   import "./globals.css";
+
+   export default function RootLayout({ children }) {
+     return (
+       <html lang="en">
+         <body>{children}</body>
+       </html>
+     );
+   }
    ```
 
 ## Background Customization
@@ -155,12 +229,10 @@ Configure Tailwind CSS in your project:
 The `initialBackground` prop supports:
 
 - Solid colors: `"white"`, `"transparent"`, or any valid CSS color.
-- Image-based backgrounds: Provide image files (e.g., `canvas-texture.png`) in your `public` directory or via a CDN. Example values:
+- Image-based backgrounds: Place image files (e.g., `canvas-texture.png`) in your Next.js `public` directory (e.g., `public/canvas-texture.png`) or serve via a CDN. Example values:
   - `"canvas-texture"`
   - `"circuit-pattern"`
   - `"hex-grid"`
-
-Place images in your project’s `public` directory (e.g., `public/canvas-texture.png`) or configure your app to serve them.
 
 ## Advanced Usage
 
@@ -213,9 +285,3 @@ For issues, feature requests, or questions, open an issue on [GitHub](https://gi
 - Minth
 - Lisk
 - Celo
-
-<!--
-npm version patch  # For bug fixes (1.0.1)
-npm version minor  # For new features (1.1.0)
-npm version major  # For breaking changes (2.0.0)
- -->
